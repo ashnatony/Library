@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Role } from '@prisma/client'
 import bcrypt from 'bcryptjs'
-import { signToken } from '@/lib/jwt'
 
 const prisma = new PrismaClient()
 
@@ -10,22 +9,7 @@ const ADMIN_REGISTRATION_CODE = 'LIBRARY-ADMIN-2024'
 
 export async function POST(request: Request) {
   try {
-    const { name, email, password, adminCode } = await request.json()
-
-    if (!name || !email || !password || !adminCode) {
-      return NextResponse.json(
-        { error: 'Name, email, password, and admin code are required' },
-        { status: 400 }
-      )
-    }
-
-    // Verify admin registration code
-    if (adminCode !== ADMIN_REGISTRATION_CODE) {
-      return NextResponse.json(
-        { error: 'Invalid admin registration code' },
-        { status: 403 }
-      )
-    }
+    const { name, email, password } = await request.json()
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -42,25 +26,37 @@ export async function POST(request: Request) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    // Create admin user
+    // Create new admin user
     const user = await prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
-        role: 'ADMIN'
+        role: Role.ADMIN
       }
     })
 
-    const token = signToken({
-      id: user.id,
-      email: user.email,
-      role: user.role
+    // Create admin access
+    await prisma.adminPermission.create({
+      data: {
+        userId: user.id,
+        isActive: true,
+        grantedBy: 'SYSTEM',
+        expiresAt: null
+      }
     })
 
-    return NextResponse.json({ token }, { status: 201 })
+    return NextResponse.json({
+      message: 'Admin account created successfully',
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    })
   } catch (error) {
-    console.error('Error during admin signup:', error)
+    console.error('Signup error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

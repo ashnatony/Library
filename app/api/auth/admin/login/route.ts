@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Role } from '@prisma/client'
 import bcrypt from 'bcryptjs'
-import { signToken } from '@/lib/jwt'
+import { cookies } from 'next/headers'
 
 const prisma = new PrismaClient()
 
@@ -9,70 +9,67 @@ export async function POST(request: Request) {
   try {
     const { email, password } = await request.json()
 
-    console.log('Login attempt for email:', email) // Debug log
-
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: 'Email and password are required' },
-        { status: 400 }
-      )
-    }
-
+    // Find user by email
     const user = await prisma.user.findUnique({
       where: { email },
-      select: {
-        id: true,
-        email: true,
-        password: true,
-        role: true,
-        name: true
+      include: {
+        adminAccess: true
       }
     })
 
-    console.log('User found:', user ? { ...user, password: '[HIDDEN]' } : null) // Debug log
-
     if (!user) {
       return NextResponse.json(
-        { error: 'Invalid credentials - User not found' },
+        { error: 'Invalid credentials' },
         { status: 401 }
       )
     }
 
-    if (user.role !== 'ADMIN') {
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password)
+    if (!isValidPassword) {
       return NextResponse.json(
-        { error: 'Access denied - Not an admin user' },
+        { error: 'Invalid credentials' },
+        { status: 401 }
+      )
+    }
+
+    // Check if user is admin
+    if (user.role !== Role.ADMIN) {
+      return NextResponse.json(
+        { error: 'Access denied. Admin privileges required.' },
         { status: 403 }
       )
     }
 
-    const isValidPassword = await bcrypt.compare(password, user.password)
-    console.log('Password validation result:', isValidPassword) // Debug log
-
-    if (!isValidPassword) {
+    // Check admin access
+    if (!user.adminAccess || !user.adminAccess.isActive) {
       return NextResponse.json(
-        { error: 'Invalid credentials - Wrong password' },
-        { status: 401 }
+        { error: 'Admin access is not active. Please contact system administrator.' },
+        { status: 403 }
       )
     }
 
-    const token = signToken({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      name: user.name
+    // Set session cookie
+    const cookieStore = cookies()
+    cookieStore.set('admin_session', user.id, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 // 24 hours
     })
 
     return NextResponse.json({
-      token,
+      message: 'Login successful',
       user: {
         id: user.id,
+        name: user.name,
         email: user.email,
         role: user.role,
-        name: user.name
+        adminAccess: user.adminAccess
       }
     })
   } catch (error) {
-    console.error('Error during admin login:', error)
+    console.error('Login error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

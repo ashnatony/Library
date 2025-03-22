@@ -1,34 +1,38 @@
 import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
-import { verifyToken } from '@/lib/jwt'
+import { cookies } from 'next/headers'
 
 const prisma = new PrismaClient()
 
+// Verify admin access
+async function verifyAdmin() {
+  const cookieStore = cookies()
+  const sessionCookie = cookieStore.get('admin_session')
+
+  if (!sessionCookie?.value) {
+    return false
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: sessionCookie.value },
+    include: { adminAccess: true }
+  })
+
+  return user?.role === 'ADMIN' && user.adminAccess?.isActive
+}
+
 // Get all books
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const token = request.headers.get('authorization')?.split(' ')[1]
-    if (!token) {
+    const isAdmin = await verifyAdmin()
+    if (!isAdmin) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
 
-    const decoded = verifyToken(token)
-    if (!decoded || (decoded as any).role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Access denied' },
-        { status: 403 }
-      )
-    }
-
-    const books = await prisma.book.findMany({
-      orderBy: {
-        title: 'asc'
-      }
-    })
-
+    const books = await prisma.book.findMany()
     return NextResponse.json(books)
   } catch (error) {
     console.error('Error fetching books:', error)
@@ -44,58 +48,26 @@ export async function GET(request: Request) {
 // Add a new book
 export async function POST(request: Request) {
   try {
-    const token = request.headers.get('authorization')?.split(' ')[1]
-    if (!token) {
+    const isAdmin = await verifyAdmin()
+    if (!isAdmin) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
 
-    const decoded = verifyToken(token)
-    if (!decoded || (decoded as any).role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Access denied' },
-        { status: 403 }
-      )
-    }
+    const { title, author, isbn, quantity } = await request.json()
 
-    const { title, author, isbn, quantity, category, description } = await request.json()
-
-    // Validate required fields
-    if (!title || !author || !isbn || !quantity || !category) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
-
-    // Check if book with ISBN already exists
-    const existingBook = await prisma.book.findUnique({
-      where: { isbn }
-    })
-
-    if (existingBook) {
-      return NextResponse.json(
-        { error: 'Book with this ISBN already exists' },
-        { status: 400 }
-      )
-    }
-
-    // Create new book
     const book = await prisma.book.create({
       data: {
         title,
         author,
         isbn,
-        quantity,
-        available: quantity,
-        category,
-        description: description || ''
+        quantity: parseInt(quantity)
       }
     })
 
-    return NextResponse.json(book, { status: 201 })
+    return NextResponse.json(book)
   } catch (error) {
     console.error('Error creating book:', error)
     return NextResponse.json(
