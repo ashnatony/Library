@@ -23,43 +23,72 @@ async function verifyAdmin() {
 
 export async function POST(request: Request) {
   try {
+    console.log('Starting borrow process...')
     const isAdmin = await verifyAdmin()
     if (!isAdmin) {
+      console.log('Unauthorized attempt to borrow')
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
 
-    const { bookId, userId } = await request.json()
+    const body = await request.json()
+    console.log('Received borrow request:', body)
 
-    // Get the book and check availability
+    const { userId, bookId, borrowDate, returnDate } = body
+
+    // Validate required fields
+    if (!userId || !bookId || !borrowDate || !returnDate) {
+      console.log('Missing required fields:', { userId, bookId, borrowDate, returnDate })
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      )
+    }
+
+    // Check if book exists and has available copies
     const book = await prisma.book.findUnique({
       where: { id: bookId }
     })
 
     if (!book) {
+      console.log('Book not found:', bookId)
       return NextResponse.json(
         { error: 'Book not found' },
         { status: 404 }
       )
     }
 
-    if (book.quantity <= 0) {
+    if (book.quantity < 1) {
+      console.log('Book not available:', bookId, 'Current quantity:', book.quantity)
       return NextResponse.json(
         { error: 'Book is not available' },
         { status: 400 }
       )
     }
 
-    // Create borrowing record and update book quantity
-    const [borrowing] = await prisma.$transaction([
+    // Parse dates
+    const parsedBorrowDate = new Date(borrowDate)
+    const parsedReturnDate = new Date(returnDate)
+
+    console.log('Creating borrowing record with dates:', {
+      borrowDate: parsedBorrowDate,
+      returnDate: parsedReturnDate
+    })
+
+    // Create borrowing record and update book quantity in a transaction
+    const [borrowing, updatedBook] = await prisma.$transaction([
       prisma.borrowing.create({
         data: {
-          bookId,
           userId,
-          borrowDate: new Date(),
-          returnDate: null
+          bookId,
+          borrowDate: parsedBorrowDate,
+          returnDate: null // Initially set to null as the book hasn't been returned yet
+        },
+        include: {
+          book: true,
+          user: true
         }
       }),
       prisma.book.update({
@@ -72,11 +101,28 @@ export async function POST(request: Request) {
       })
     ])
 
-    return NextResponse.json(borrowing)
+    // Format the response
+    const formattedBorrowing = {
+      id: borrowing.id,
+      bookId: borrowing.book.id,
+      userId: borrowing.user.id,
+      bookTitle: borrowing.book.title,
+      bookAuthor: borrowing.book.author,
+      bookIsbn: borrowing.book.isbn,
+      userName: borrowing.user.name,
+      userEmail: borrowing.user.email,
+      borrowDate: borrowing.borrowDate.toISOString(),
+      returnDate: borrowing.returnDate?.toISOString() || null,
+      isReturned: false,
+      isOverdue: false
+    }
+
+    console.log('Successfully created borrowing record:', formattedBorrowing)
+    return NextResponse.json(formattedBorrowing)
   } catch (error) {
-    console.error('Error borrowing book:', error)
+    console.error('Error in borrow endpoint:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to borrow book' },
       { status: 500 }
     )
   } finally {

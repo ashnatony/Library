@@ -1,53 +1,74 @@
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
+import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
 export async function GET() {
   try {
+    console.log('Starting borrowed books fetch...')
     const cookieStore = cookies()
-    const sessionCookie = cookieStore.get('user_session')
-    console.log('Session cookie:', sessionCookie?.value)
+    const userSession = cookieStore.get('user_session')
+    console.log('User session cookie:', userSession?.value)
 
-    if (!sessionCookie?.value) {
-      console.error('No session cookie found')
-      return NextResponse.json(
-        { error: 'Please log in to view your borrowed books' },
-        { status: 401 }
-      )
+    if (!userSession) {
+      console.log('No user session found')
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: sessionCookie.value },
+    const userId = userSession.value
+    console.log('Fetching books for user:', userId)
+
+    // Fetch all borrowings for the user (both returned and not returned)
+    const borrowings = await prisma.borrowing.findMany({
+      where: {
+        userId: userId
+      },
       include: {
-        borrowings: {
-          where: {
-            returnedDate: null
-          },
-          include: {
-            book: true
-          }
-        }
+        book: true,
+        user: true
+      },
+      orderBy: {
+        borrowDate: 'desc'
       }
     })
 
-    console.log('Found user:', user?.id)
-    console.log('User borrowings:', user?.borrowings?.length)
+    console.log('Raw borrowings data:', JSON.stringify(borrowings, null, 2))
 
-    if (!user) {
-      console.error('User not found for session:', sessionCookie.value)
-      return NextResponse.json(
-        { error: 'User session expired. Please log in again.' },
-        { status: 401 }
-      )
-    }
+    // Transform the data to match the expected format
+    const formattedBooks = borrowings
+      .filter(borrowing => borrowing.book) // Filter out any borrowings without book data
+      .map(borrowing => {
+        try {
+          const now = new Date()
+          const borrowDate = new Date(borrowing.borrowDate)
+          const returnDate = borrowing.returnDate ? new Date(borrowing.returnDate) : null
+          const dueDate = new Date(borrowDate)
+          dueDate.setDate(dueDate.getDate() + 14) // Assuming 14 days borrowing period
 
-    return NextResponse.json(user.borrowings)
+          return {
+            id: borrowing.id,
+            title: borrowing.book.title,
+            author: borrowing.book.author,
+            isbn: borrowing.book.isbn,
+            borrowedAt: borrowing.borrowDate.toISOString(),
+            returnDate: returnDate?.toISOString() || null,
+            isOverdue: !returnDate && now > dueDate,
+            isReturned: returnDate !== null
+          }
+        } catch (error) {
+          console.error('Error formatting book:', error, 'Borrowing:', borrowing)
+          return null
+        }
+      })
+      .filter(book => book !== null) // Remove any failed transformations
+
+    console.log('Final formatted books:', JSON.stringify(formattedBooks, null, 2))
+    return NextResponse.json(formattedBooks)
   } catch (error) {
-    console.error('Error fetching borrowed books:', error)
+    console.error('Error in borrowed books API:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch borrowed books. Please try again.' },
+      { error: 'Failed to fetch borrowed books' },
       { status: 500 }
     )
   } finally {

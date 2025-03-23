@@ -1,39 +1,34 @@
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
 import { cookies } from 'next/headers'
+import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
 export async function GET() {
   try {
     const cookieStore = cookies()
-    const sessionCookie = cookieStore.get('user_session')
-
-    if (!sessionCookie?.value) {
-      return NextResponse.json(
-        { isValid: false, error: 'No session found' },
-        { status: 401 }
-      )
+    const userSession = cookieStore.get('user_session')
+    
+    if (!userSession?.value) {
+      return NextResponse.json({ isValid: false })
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: sessionCookie.value }
+      where: { id: userSession.value }
     })
 
     if (!user) {
-      return NextResponse.json(
-        { isValid: false, error: 'User not found' },
-        { status: 401 }
-      )
+      return NextResponse.json({ isValid: false })
     }
 
-    return NextResponse.json({ isValid: true, user })
+    return NextResponse.json({
+      isValid: true,
+      name: user.name,
+      email: user.email
+    })
   } catch (error) {
     console.error('Error verifying user:', error)
-    return NextResponse.json(
-      { isValid: false, error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ isValid: false })
   } finally {
     await prisma.$disconnect()
   }

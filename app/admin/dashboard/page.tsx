@@ -17,18 +17,39 @@ interface User {
   email: string
 }
 
+interface BorrowedBook {
+  id: string
+  bookId: string
+  userId: string
+  bookTitle: string
+  bookAuthor: string
+  bookIsbn: string
+  userName: string
+  userEmail: string
+  borrowDate: string
+  returnDate: string | null
+  isReturned: boolean
+  isOverdue: boolean
+}
+
 export default function AdminDashboard() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [books, setBooks] = useState<Book[]>([])
   const [users, setUsers] = useState<User[]>([])
+  const [borrowedBooks, setBorrowedBooks] = useState<BorrowedBook[]>([])
   const [showAddBook, setShowAddBook] = useState(false)
   const [showBorrowBook, setShowBorrowBook] = useState(false)
   const [selectedBook, setSelectedBook] = useState<Book | null>(null)
   const [borrowData, setBorrowData] = useState({
     userId: '',
-    bookId: ''
+    bookId: '',
+    borrowDate: new Date().toISOString().split('T')[0],
+    returnDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  })
+  const [returnData, setReturnData] = useState({
+    borrowingId: ''
   })
   const [newBook, setNewBook] = useState({
     title: '',
@@ -48,6 +69,7 @@ export default function AdminDashboard() {
         } else {
           fetchBooks()
           fetchUsers()
+          fetchBorrowedBooks()
         }
       } catch (error) {
         console.error('Auth check error:', error)
@@ -84,6 +106,32 @@ export default function AdminDashboard() {
     }
   }
 
+  const fetchBorrowedBooks = async () => {
+    try {
+      console.log('Fetching borrowed books...')
+      const response = await fetch('/api/admin/borrowed-books')
+      console.log('Borrowed books API response status:', response.status)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Borrowed books data received:', data)
+        setBorrowedBooks(data)
+        console.log('Borrowed books state updated:', data.length, 'books')
+      } else {
+        const errorData = await response.json()
+        console.error('Error response from borrowed books API:', errorData)
+      }
+    } catch (error) {
+      console.error('Error fetching borrowed books:', error)
+    }
+  }
+
+  // Add an interval to refresh borrowed books every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(fetchBorrowedBooks, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
   const handleAddBook = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
@@ -108,28 +156,66 @@ export default function AdminDashboard() {
   const handleBorrowBook = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
+      console.log('Submitting borrow request:', borrowData)
       const response = await fetch('/api/admin/borrow', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(borrowData),
+        body: JSON.stringify({
+          ...borrowData,
+          borrowDate: new Date(borrowData.borrowDate).toISOString(),
+          returnDate: new Date(borrowData.returnDate).toISOString()
+        }),
       })
 
+      console.log('Borrow response status:', response.status)
       if (response.ok) {
-        setBorrowData({ userId: '', bookId: '' })
+        setBorrowData({
+          userId: '',
+          bookId: '',
+          borrowDate: new Date().toISOString().split('T')[0],
+          returnDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        })
         setShowBorrowBook(false)
-        setSelectedBook(null)
-        fetchBooks()
+        // Refresh both books and borrowed books lists
+        await Promise.all([fetchBooks(), fetchBorrowedBooks()])
+        console.log('Successfully refreshed data after borrowing')
+      } else {
+        const errorData = await response.json()
+        console.error('Error response from borrow API:', errorData)
       }
     } catch (error) {
       console.error('Error borrowing book:', error)
     }
   }
 
+  const handleReturnBook = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const response = await fetch('/api/admin/return', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(returnData),
+      })
+
+      if (response.ok) {
+        setReturnData({ borrowingId: '' })
+        fetchBorrowedBooks()
+      } else {
+        const errorData = await response.json()
+        console.error('Error response from return API:', errorData)
+      }
+    } catch (error) {
+      console.error('Error returning book:', error)
+    }
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-accent-900 to-gray-900 flex items-center justify-center">
         <div className="text-xl text-white">Loading...</div>
       </div>
     )
@@ -137,12 +223,12 @@ export default function AdminDashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-accent-900 to-gray-900 flex items-center justify-center">
         <div className="text-xl text-red-600">
           {error}
           <button 
             onClick={() => router.push('/admin/login')}
-            className="ml-4 bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600"
+            className="ml-4 bg-accent-500 text-white px-4 py-2 rounded hover:bg-accent-600"
           >
             Go to Login
           </button>
@@ -152,137 +238,121 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-purple-900">
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
-            <div className="space-x-4">
-              <button
-                onClick={() => setShowBorrowBook(!showBorrowBook)}
-                className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors duration-200"
-              >
-                {showBorrowBook ? 'Cancel' : 'Borrow Book'}
-              </button>
-              <button
-                onClick={() => setShowAddBook(!showAddBook)}
-                className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors duration-200"
-              >
-                {showAddBook ? 'Cancel' : 'Add New Book'}
-              </button>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-accent-900 to-gray-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-white rounded-xl shadow-2xl p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+            <button
+              onClick={() => router.push('/admin/login')}
+              className="px-4 py-2 bg-accent-600 text-white rounded-lg hover:bg-accent-700 transition-colors"
+            >
+              Logout
+            </button>
           </div>
 
-          {showBorrowBook && (
-            <div className="mt-6 bg-white p-6 rounded-lg shadow-xl">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900">Borrow Book</h2>
-              <form onSubmit={handleBorrowBook} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Select Book</label>
-                  <select
-                    value={borrowData.bookId}
-                    onChange={(e) => setBorrowData({ ...borrowData, bookId: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-                    required
-                    title="Select a book to borrow"
-                  >
-                    <option value="">Select a book</option>
-                    {books.map((book) => (
-                      <option key={book.id} value={book.id}>
-                        {book.title} - Available: {book.quantity}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Select User</label>
-                  <select
-                    value={borrowData.userId}
-                    onChange={(e) => setBorrowData({ ...borrowData, userId: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-                    required
-                    title="Select a user to borrow the book"
-                  >
-                    <option value="">Select a user</option>
-                    {users.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.name} ({user.email})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="submit"
-                  className="w-full bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors duration-200"
-                >
-                  Borrow Book
-                </button>
-              </form>
-            </div>
-          )}
-
-          {showAddBook && (
-            <div className="mt-6 bg-white p-6 rounded-lg shadow-xl">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900">Add New Book</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="bg-gradient-to-r from-accent-50 to-primary-50 p-6 rounded-lg shadow-lg">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Add New Book</h2>
               <form onSubmit={handleAddBook} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Title</label>
-                  <input
-                    type="text"
-                    value={newBook.title}
-                    onChange={(e) => setNewBook({ ...newBook, title: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-                    required
-                    placeholder="Enter book title"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Author</label>
-                  <input
-                    type="text"
-                    value={newBook.author}
-                    onChange={(e) => setNewBook({ ...newBook, author: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-                    required
-                    placeholder="Enter author name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">ISBN</label>
-                  <input
-                    type="text"
-                    value={newBook.isbn}
-                    onChange={(e) => setNewBook({ ...newBook, isbn: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-                    required
-                    placeholder="Enter ISBN"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Quantity</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={newBook.quantity}
-                    onChange={(e) => setNewBook({ ...newBook, quantity: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-                    required
-                    placeholder="Enter quantity"
-                  />
-                </div>
+                <input
+                  type="text"
+                  placeholder="Title"
+                  value={newBook.title}
+                  onChange={(e) => setNewBook({ ...newBook, title: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                />
+                <input
+                  type="text"
+                  placeholder="Author"
+                  value={newBook.author}
+                  onChange={(e) => setNewBook({ ...newBook, author: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                />
+                <input
+                  type="text"
+                  placeholder="ISBN"
+                  value={newBook.isbn}
+                  onChange={(e) => setNewBook({ ...newBook, isbn: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                />
+                <input
+                  type="number"
+                  placeholder="Quantity"
+                  value={newBook.quantity}
+                  onChange={(e) => setNewBook({ ...newBook, quantity: parseInt(e.target.value) })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                />
                 <button
                   type="submit"
-                  className="w-full bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors duration-200"
+                  className="w-full px-4 py-2 bg-accent-600 text-white rounded-lg hover:bg-accent-700 transition-colors"
                 >
                   Add Book
                 </button>
               </form>
             </div>
-          )}
+
+            <div className="bg-gradient-to-r from-accent-50 to-primary-50 p-6 rounded-lg shadow-lg">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Borrow Book</h2>
+              <form onSubmit={handleBorrowBook} className="space-y-4">
+                <input
+                  type="text"
+                  placeholder="User ID"
+                  value={borrowData.userId}
+                  onChange={(e) => setBorrowData({ ...borrowData, userId: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                />
+                <input
+                  type="text"
+                  placeholder="Book ID"
+                  value={borrowData.bookId}
+                  onChange={(e) => setBorrowData({ ...borrowData, bookId: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                />
+                <input
+                  type="date"
+                  value={borrowData.borrowDate}
+                  onChange={(e) => setBorrowData({ ...borrowData, borrowDate: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                />
+                <input
+                  type="date"
+                  value={borrowData.returnDate}
+                  onChange={(e) => setBorrowData({ ...borrowData, returnDate: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                />
+                <button
+                  type="submit"
+                  className="w-full px-4 py-2 bg-accent-600 text-white rounded-lg hover:bg-accent-700 transition-colors"
+                >
+                  Borrow Book
+                </button>
+              </form>
+            </div>
+
+            <div className="bg-gradient-to-r from-accent-50 to-primary-50 p-6 rounded-lg shadow-lg">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Return Book</h2>
+              <form onSubmit={handleReturnBook} className="space-y-4">
+                <input
+                  type="text"
+                  placeholder="Borrowing ID"
+                  value={returnData.borrowingId}
+                  onChange={(e) => setReturnData({ ...returnData, borrowingId: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                />
+                <button
+                  type="submit"
+                  className="w-full px-4 py-2 bg-accent-600 text-white rounded-lg hover:bg-accent-700 transition-colors"
+                >
+                  Return Book
+                </button>
+              </form>
+            </div>
+          </div>
 
           <div className="mt-8">
-            <h2 className="text-xl font-semibold mb-4 text-white">Book List</h2>
-            <div className="bg-white shadow-xl rounded-lg overflow-hidden">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Book List</h2>
+            <div className="bg-white rounded-lg shadow overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -294,11 +364,11 @@ export default function AdminDashboard() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {books.map((book) => (
-                    <tr key={book.id} className="hover:bg-gray-50">
+                    <tr key={book.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{book.title}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{book.author}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{book.isbn}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{book.quantity}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{book.author}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{book.isbn}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{book.quantity}</td>
                     </tr>
                   ))}
                 </tbody>

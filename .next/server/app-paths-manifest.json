@@ -1,7 +1,10 @@
 {
-  "/admin/dashboard/page": "app/admin/dashboard/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/admin/login/page": "app/admin/login/page.js",
   "/page": "app/page.js",
-  "/admin/signup/page": "app/admin/signup/page.js",
-  "/login/page": "app/login/page.js",
-  "/admin/login/page": "app/admin/login/page.js"
+  "/admin/dashboard/page": "app/admin/dashboard/page.js",
+  "/api/admin/borrowed-books/route": "app/api/admin/borrowed-books/route.js",
+  "/api/auth/admin/verify/route": "app/api/auth/admin/verify/route.js",
+  "/api/admin/users/route": "app/api/admin/users/route.js",
+  "/api/admin/books/route": "app/api/admin/books/route.js"
 }
