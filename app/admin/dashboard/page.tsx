@@ -153,6 +153,23 @@ export default function AdminDashboard() {
     }
   }
 
+  // Add this function to get available books
+  const getAvailableBooks = () => {
+    return books.filter(book => {
+      const borrowedCount = borrowedBooks.filter(bb => bb.bookId === book.id && !bb.isReturned).length;
+      return book.quantity > borrowedCount;
+    });
+  };
+
+  // Add this function to handle borrow data changes
+  const handleBorrowDataChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setBorrowData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   const handleBorrowBook = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
@@ -294,40 +311,12 @@ export default function AdminDashboard() {
 
             <div className="bg-gradient-to-r from-accent-50 to-primary-50 p-6 rounded-lg shadow-lg">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Borrow Book</h2>
-              <form onSubmit={handleBorrowBook} className="space-y-4">
-                <input
-                  type="text"
-                  placeholder="User ID"
-                  value={borrowData.userId}
-                  onChange={(e) => setBorrowData({ ...borrowData, userId: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-accent-500 focus:border-transparent"
-                />
-                <input
-                  type="text"
-                  placeholder="Book ID"
-                  value={borrowData.bookId}
-                  onChange={(e) => setBorrowData({ ...borrowData, bookId: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-accent-500 focus:border-transparent"
-                />
-                <input
-                  type="date"
-                  value={borrowData.borrowDate}
-                  onChange={(e) => setBorrowData({ ...borrowData, borrowDate: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-accent-500 focus:border-transparent"
-                />
-                <input
-                  type="date"
-                  value={borrowData.returnDate}
-                  onChange={(e) => setBorrowData({ ...borrowData, returnDate: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-accent-500 focus:border-transparent"
-                />
-                <button
-                  type="submit"
-                  className="w-full px-4 py-2 bg-accent-600 text-white rounded-lg hover:bg-accent-700 transition-colors"
-                >
-                  Borrow Book
-                </button>
-              </form>
+              <button
+                onClick={() => setShowBorrowBook(true)}
+                className="w-full px-4 py-2 bg-accent-600 text-white rounded-lg hover:bg-accent-700 transition-colors"
+              >
+                Borrow Book
+              </button>
             </div>
 
             <div className="bg-gradient-to-r from-accent-50 to-primary-50 p-6 rounded-lg shadow-lg">
@@ -377,6 +366,95 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {showBorrowBook && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h2 className="text-xl font-bold mb-4">Borrow Book</h2>
+            <form onSubmit={handleBorrowBook} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">User</label>
+                <select
+                  name="userId"
+                  value={borrowData.userId}
+                  onChange={handleBorrowDataChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent-500 focus:ring-accent-500"
+                  required
+                >
+                  <option value="">Select a user</option>
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} ({user.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Book</label>
+                <select
+                  name="bookId"
+                  value={borrowData.bookId}
+                  onChange={handleBorrowDataChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent-500 focus:ring-accent-500"
+                  required
+                >
+                  <option value="">Select a book</option>
+                  {getAvailableBooks().map(book => {
+                    const borrowedCount = borrowedBooks.filter(bb => bb.bookId === book.id && !bb.isReturned).length;
+                    const available = book.quantity - borrowedCount;
+                    return (
+                      <option key={book.id} value={book.id}>
+                        {book.title} by {book.author} (Available: {available}/{book.quantity})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Borrow Date</label>
+                <input
+                  type="date"
+                  name="borrowDate"
+                  value={borrowData.borrowDate}
+                  onChange={handleBorrowDataChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent-500 focus:ring-accent-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Return Date</label>
+                <input
+                  type="date"
+                  name="returnDate"
+                  value={borrowData.returnDate}
+                  onChange={handleBorrowDataChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-accent-500 focus:ring-accent-500"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowBorrowBook(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-accent-600 rounded-md hover:bg-accent-700"
+                >
+                  Borrow
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 } 
