@@ -67,7 +67,7 @@ model Borrowing {
   userId        String    @db.ObjectId
   bookId        String    @db.ObjectId
   borrowDate    DateTime  @default(now())
-  dueDate       DateTime
+  dueDate       DateTime?
   returnDate    DateTime?
   status        BorrowStatus @default(BORROWED)
   createdAt     DateTime  @default(now())

@@ -4,15 +4,16 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import toast, { Toaster } from 'react-hot-toast'
-import ReturnBook from '../components/ReturnBook'
+import { ReturnBook } from '../components/ReturnBook'
 import Navigation from '../components/Navigation'
 
 interface Book {
   id: string
   title: string
   author: string
+  regNumber: string
   borrowedDate: string
-  dueDate: string
+  dueDate: string | null
   fine: number
 }
 
@@ -118,13 +119,19 @@ export default function Dashboard() {
                       <div className="space-y-3">
                         <div className="flex items-center text-sm">
                           <span className="text-gray-600">
+                            Registration Number: {book.regNumber}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center text-sm">
+                          <span className="text-gray-600">
                             Borrowed: {new Date(book.borrowedDate).toLocaleDateString()}
                           </span>
                         </div>
                         
                         <div className="flex items-center text-sm">
                           <span className={book.fine > 0 ? 'text-red-600' : 'text-gray-600'}>
-                            Due: {new Date(book.dueDate).toLocaleDateString()}
+                            Due: {book.dueDate ? new Date(book.dueDate).toLocaleDateString() : 'Not set'}
                           </span>
                         </div>
 

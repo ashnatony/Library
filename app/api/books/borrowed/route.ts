@@ -1,11 +1,26 @@
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 import jwt from 'jsonwebtoken'
 
 const prisma = new PrismaClient()
 
-type BorrowingWithBook = Awaited<ReturnType<typeof prisma.borrowing.findFirst> & {
-  book: NonNullable<Awaited<ReturnType<typeof prisma.book.findUnique>>>
+type BorrowingWithRelations = Prisma.BorrowingGetPayload<{
+  include: {
+    book: {
+      select: {
+        id: true,
+        title: true,
+        author: true,
+        availableCopies: true
+      }
+    },
+    user: {
+      select: {
+        id: true,
+        regNumber: true
+      }
+    }
+  }
 }>
 
 export async function GET(request: Request) {
@@ -25,33 +40,57 @@ export async function GET(request: Request) {
     const borrowings = await prisma.borrowing.findMany({
       where: {
         userId: decoded.userId,
-        returnedDate: null // Only get books that haven't been returned
+        returnDate: null, // Only get books that haven't been returned
+        book: {
+          availableCopies: {
+            gt: 0 // Only include books that are still available
+          }
+        }
       },
       include: {
-        book: true
+        book: {
+          select: {
+            id: true,
+            title: true,
+            author: true,
+            availableCopies: true
+          }
+        },
+        user: {
+          select: {
+            id: true,
+            regNumber: true
+          }
+        }
       },
       orderBy: {
-        dueDate: 'asc'
+        borrowDate: 'desc'
       }
-    })
+    }) as BorrowingWithRelations[]
 
     // Transform the data to match the dashboard interface
-    const books = borrowings.map((borrowing: NonNullable<BorrowingWithBook>) => {
-      const dueDate = new Date(borrowing.dueDate)
-      const today = new Date()
-      const diffTime = today.getTime() - dueDate.getTime()
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-      const fine = diffDays > 0 ? diffDays * 1 : 0 // $1 per day if overdue
+    const books = borrowings
+      .filter(borrowing => borrowing.book && borrowing.user) // Filter out any borrowings with null relations
+      .map((borrowing) => {
+        let fine = 0
+        if (borrowing.dueDate) {
+          const dueDate = new Date(borrowing.dueDate)
+          const today = new Date()
+          const diffTime = today.getTime() - dueDate.getTime()
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+          fine = diffDays > 0 ? diffDays * 1 : 0 // $1 per day if overdue
+        }
 
-      return {
-        id: borrowing.id,
-        title: borrowing.book.title,
-        author: borrowing.book.author,
-        borrowedDate: borrowing.borrowDate.toISOString(),
-        dueDate: borrowing.dueDate.toISOString(),
-        fine
-      }
-    })
+        return {
+          id: borrowing.id,
+          title: borrowing.book.title,
+          author: borrowing.book.author,
+          regNumber: borrowing.user.regNumber,
+          borrowedDate: borrowing.borrowDate.toISOString(),
+          dueDate: borrowing.dueDate?.toISOString() || null,
+          fine
+        }
+      })
 
     return NextResponse.json({ books })
   } catch (error) {

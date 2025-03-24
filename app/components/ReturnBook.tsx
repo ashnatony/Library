@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation'
 
 interface ReturnBookProps {
   borrowingId: string
+  token: string
   onReturn: () => void
 }
 
-export function ReturnBook({ borrowingId, onReturn }: ReturnBookProps) {
+export function ReturnBook({ borrowingId, token, onReturn }: ReturnBookProps) {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
@@ -19,7 +20,7 @@ export function ReturnBook({ borrowingId, onReturn }: ReturnBookProps) {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ borrowingId })
       })

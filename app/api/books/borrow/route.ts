@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Book not found' }, { status: 404 })
     }
 
-    if (book.available < 1) {
+    if (book.availableCopies < 1) {
       return NextResponse.json({ error: 'Book is not available' }, { status: 400 })
     }
 
@@ -40,10 +40,25 @@ export async function POST(request: Request) {
         data: {
           userId: decoded.userId,
           bookId: bookId,
+          borrowDate: new Date(),
           dueDate: new Date(dueDate),
+          returnDate: null,
+          status: 'BORROWED'
         },
         include: {
-          book: true
+          book: {
+            select: {
+              id: true,
+              title: true,
+              author: true
+            }
+          },
+          user: {
+            select: {
+              id: true,
+              regNumber: true
+            }
+          }
         }
       })
 
@@ -51,7 +66,7 @@ export async function POST(request: Request) {
       await prisma.book.update({
         where: { id: bookId },
         data: {
-          available: {
+          availableCopies: {
             decrement: 1
           }
         }
