@@ -8,7 +8,8 @@ interface Book {
   title: string
   author: string
   isbn: string
-  quantity: number
+  totalCopies: number
+  availableCopies: number
 }
 
 interface User {
@@ -55,7 +56,8 @@ export default function AdminDashboard() {
     title: '',
     author: '',
     isbn: '',
-    quantity: '1'
+    totalCopies: 1,
+    availableCopies: 1
   })
 
   useEffect(() => {
@@ -144,7 +146,7 @@ export default function AdminDashboard() {
       })
 
       if (response.ok) {
-        setNewBook({ title: '', author: '', isbn: '', quantity: '1' })
+        setNewBook({ title: '', author: '', isbn: '', totalCopies: 1, availableCopies: 1 })
         setShowAddBook(false)
         fetchBooks()
       }
@@ -155,10 +157,7 @@ export default function AdminDashboard() {
 
   // Add this function to get available books
   const getAvailableBooks = () => {
-    return books.filter(book => {
-      const borrowedCount = borrowedBooks.filter(bb => bb.bookId === book.id && !bb.isReturned).length;
-      return book.quantity > borrowedCount;
-    });
+    return books.filter(book => book.availableCopies > 0);
   };
 
   // Add this function to handle borrow data changes
@@ -295,9 +294,9 @@ export default function AdminDashboard() {
                 />
                 <input
                   type="number"
-                  placeholder="Quantity"
-                  value={newBook.quantity}
-                  onChange={(e) => setNewBook({ ...newBook, quantity: parseInt(e.target.value) })}
+                  placeholder="Total Copies"
+                  value={newBook.totalCopies}
+                  onChange={(e) => setNewBook({ ...newBook, totalCopies: parseInt(e.target.value), availableCopies: parseInt(e.target.value) })}
                   className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-accent-500 focus:border-transparent"
                 />
                 <button
@@ -348,7 +347,8 @@ export default function AdminDashboard() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Author</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ISBN</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Copies</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Available Copies</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -357,7 +357,8 @@ export default function AdminDashboard() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{book.title}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{book.author}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{book.isbn}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{book.quantity}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{book.totalCopies}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{book.availableCopies}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -400,15 +401,11 @@ export default function AdminDashboard() {
                   required
                 >
                   <option value="">Select a book</option>
-                  {getAvailableBooks().map(book => {
-                    const borrowedCount = borrowedBooks.filter(bb => bb.bookId === book.id && !bb.isReturned).length;
-                    const available = book.quantity - borrowedCount;
-                    return (
-                      <option key={book.id} value={book.id}>
-                        {book.title} by {book.author} (Available: {available}/{book.quantity})
-                      </option>
-                    );
-                  })}
+                  {getAvailableBooks().map(book => (
+                    <option key={book.id} value={book.id}>
+                      {book.title} by {book.author} (Available: {book.availableCopies}/{book.totalCopies})
+                    </option>
+                  ))}
                 </select>
               </div>
 

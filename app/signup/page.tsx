@@ -11,6 +11,7 @@ export default function Signup() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    regNumber: '',
     password: '',
     confirmPassword: ''
   })
@@ -42,6 +43,7 @@ export default function Signup() {
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
+          regNumber: formData.regNumber,
           password: formData.password,
         }),
       })
@@ -113,6 +115,22 @@ export default function Signup() {
                 onChange={handleChange}
                 className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-shadow"
                 required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="regNumber" className="block text-sm font-medium text-gray-700">
+                Registration Number
+              </label>
+              <input
+                type="text"
+                id="regNumber"
+                name="regNumber"
+                value={formData.regNumber}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-shadow"
+                required
+                placeholder="Enter your registration number"
               />
             </div>
 

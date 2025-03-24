@@ -4,12 +4,26 @@ import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
-// This should be stored in an environment variable in production
-const ADMIN_REGISTRATION_CODE = 'LIBRARY-ADMIN-2024'
-
 export async function POST(request: Request) {
   try {
-    const { name, email, password } = await request.json()
+    const body = await request.json()
+    const { name, email, password, adminCode } = body
+
+    // Validate required fields
+    if (!name || !email || !password || !adminCode) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      )
+    }
+
+    // Validate admin code
+    if (adminCode !== process.env.ADMIN_REGISTRATION_CODE) {
+      return NextResponse.json(
+        { error: 'Invalid admin registration code' },
+        { status: 400 }
+      )
+    }
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -26,42 +40,36 @@ export async function POST(request: Request) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    // Create new admin user
+    // Create admin user with null regNumber
     const user = await prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
-        role: Role.ADMIN
+        role: Role.ADMIN,
+        regNumber: null,
+        adminAccess: {
+          create: {
+            isActive: true,
+            grantedBy: 'SYSTEM',
+            grantedAt: new Date()
+          }
+        }
+      },
+      include: {
+        adminAccess: true
       }
     })
 
-    // Create admin access
-    await prisma.adminPermission.create({
-      data: {
-        userId: user.id,
-        isActive: true,
-        grantedBy: 'SYSTEM',
-        expiresAt: null
-      }
-    })
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = user
 
-    return NextResponse.json({
-      message: 'Admin account created successfully',
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      }
-    })
+    return NextResponse.json(userWithoutPassword)
   } catch (error) {
-    console.error('Signup error:', error)
+    console.error('Admin signup error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to create admin account' },
       { status: 500 }
     )
-  } finally {
-    await prisma.$disconnect()
   }
 } 

@@ -12,12 +12,13 @@ export async function verifyPassword(password: string, hashedPassword: string) {
   return bcrypt.compare(password, hashedPassword)
 }
 
-export async function createUser(name: string, email: string, password: string) {
+export async function createUser(name: string, email: string, regNumber: string, password: string) {
   const hashedPassword = await hashPassword(password)
   return prisma.user.create({
     data: {
       name,
       email,
+      regNumber,
       password: hashedPassword,
     },
   })

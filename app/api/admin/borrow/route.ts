@@ -60,8 +60,8 @@ export async function POST(request: Request) {
       )
     }
 
-    if (book.quantity < 1) {
-      console.log('Book not available:', bookId, 'Current quantity:', book.quantity)
+    if (book.availableCopies < 1) {
+      console.log('Book not available:', bookId, 'Available copies:', book.availableCopies)
       return NextResponse.json(
         { error: 'Book is not available' },
         { status: 400 }
@@ -84,6 +84,7 @@ export async function POST(request: Request) {
           userId,
           bookId,
           borrowDate: parsedBorrowDate,
+          dueDate: parsedReturnDate,
           returnDate: null // Initially set to null as the book hasn't been returned yet
         },
         include: {
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
       prisma.book.update({
         where: { id: bookId },
         data: {
-          quantity: {
+          availableCopies: {
             decrement: 1
           }
         }

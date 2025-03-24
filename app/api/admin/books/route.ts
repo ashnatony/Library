@@ -32,7 +32,11 @@ export async function GET() {
       )
     }
 
-    const books = await prisma.book.findMany()
+    const books = await prisma.book.findMany({
+      orderBy: {
+        createdAt: 'desc'
+      }
+    })
     return NextResponse.json(books)
   } catch (error) {
     console.error('Error fetching books:', error)
@@ -56,14 +60,31 @@ export async function POST(request: Request) {
       )
     }
 
-    const { title, author, isbn, quantity } = await request.json()
+    const { 
+      title, 
+      author, 
+      isbn, 
+      publisher,
+      publishYear,
+      category,
+      description,
+      totalCopies,
+      availableCopies,
+      location
+    } = await request.json()
 
     const book = await prisma.book.create({
       data: {
         title,
         author,
         isbn,
-        quantity: parseInt(quantity)
+        publisher,
+        publishYear: publishYear ? parseInt(publishYear) : null,
+        category,
+        description,
+        totalCopies: totalCopies ? parseInt(totalCopies) : 1,
+        availableCopies: availableCopies ? parseInt(availableCopies) : 1,
+        location
       }
     })
 
@@ -82,7 +103,26 @@ export async function POST(request: Request) {
 // Update a book
 export async function PUT(request: Request) {
   try {
+    const isAdmin = await verifyAdmin()
+    if (!isAdmin) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     const { id, ...data } = await request.json()
+
+    // Convert numeric fields if they exist
+    if (data.publishYear) {
+      data.publishYear = parseInt(data.publishYear)
+    }
+    if (data.totalCopies) {
+      data.totalCopies = parseInt(data.totalCopies)
+    }
+    if (data.availableCopies) {
+      data.availableCopies = parseInt(data.availableCopies)
+    }
 
     const book = await prisma.book.update({
       where: { id },
@@ -96,12 +136,22 @@ export async function PUT(request: Request) {
       { error: 'Internal server error' },
       { status: 500 }
     )
+  } finally {
+    await prisma.$disconnect()
   }
 }
 
 // Delete a book
 export async function DELETE(request: Request) {
   try {
+    const isAdmin = await verifyAdmin()
+    if (!isAdmin) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     const { id } = await request.json()
 
     await prisma.book.delete({
@@ -115,5 +165,7 @@ export async function DELETE(request: Request) {
       { error: 'Internal server error' },
       { status: 500 }
     )
+  } finally {
+    await prisma.$disconnect()
   }
 } 

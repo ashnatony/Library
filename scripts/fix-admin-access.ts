@@ -22,6 +22,12 @@ async function fixAdminAccess() {
 
     console.log('Found admin user:', adminUser.email)
 
+    // Update admin user to set regNumber to null
+    await prisma.user.update({
+      where: { id: adminUser.id },
+      data: { regNumber: null }
+    })
+
     // Check if admin access exists
     if (!adminUser.adminAccess) {
       console.log('Creating admin access...')
@@ -49,6 +55,7 @@ async function fixAdminAccess() {
     console.log('Admin access status:', {
       email: verifiedUser?.email,
       role: verifiedUser?.role,
+      regNumber: verifiedUser?.regNumber,
       isActive: verifiedUser?.adminAccess?.isActive
     })
 
